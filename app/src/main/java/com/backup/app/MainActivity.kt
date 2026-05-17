@@ -225,32 +225,41 @@ class MainActivity : AppCompatActivity() {
 
     private fun backupAndUpload(app: AppInfo, username: String, password: String): Boolean {
         return try {
+            android.util.Log.d("BackupApp", "开始备份: ${app.name}")
+
             // 1. 创建临时目录
             val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
             val backupDir = File(cacheDir, "backup_${app.packageName}_$timestamp")
             backupDir.mkdirs()
+            android.util.Log.d("BackupApp", "临时目录: ${backupDir.absolutePath}")
 
             // 2. 复制 APK
             val apkFile = File(backupDir, "base.apk")
             File(app.apkPath).copyTo(apkFile, overwrite = true)
+            android.util.Log.d("BackupApp", "APK 大小: ${apkFile.length()} bytes")
 
             // 3. 备份应用数据（使用 tar + root）
             val dataFile = File(backupDir, "data.tar.gz")
             backupAppData(app.packageName, dataFile)
+            android.util.Log.d("BackupApp", "数据文件大小: ${dataFile.length()} bytes")
 
             // 4. 打包成 zip
             val zipFile = File(cacheDir, "${app.packageName}_$timestamp.zip")
             createZip(backupDir, zipFile)
+            android.util.Log.d("BackupApp", "ZIP 大小: ${zipFile.length()} bytes")
 
             // 5. 检查大小限制（150M）
             if (zipFile.length() > 150 * 1024 * 1024) {
+                android.util.Log.e("BackupApp", "文件过大: ${zipFile.length()} bytes")
                 zipFile.delete()
                 backupDir.deleteRecursively()
                 return false
             }
 
             // 6. 上传到服务器
+            android.util.Log.d("BackupApp", "开始上传到: $serverUrl/api/backup/upload")
             val result = uploadToServer(zipFile, app.name, app.packageName, username, password)
+            android.util.Log.d("BackupApp", "上传结果: $result")
 
             // 7. 清理临时文件
             zipFile.delete()
@@ -258,6 +267,7 @@ class MainActivity : AppCompatActivity() {
 
             result
         } catch (e: Exception) {
+            android.util.Log.e("BackupApp", "备份失败", e)
             e.printStackTrace()
             false
         }
@@ -295,6 +305,9 @@ class MainActivity : AppCompatActivity() {
     ): Boolean {
         return try {
             val client = OkHttpClient.Builder()
+                .connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+                .writeTimeout(120, java.util.concurrent.TimeUnit.SECONDS)
+                .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
                 .build()
 
             val requestBody = MultipartBody.Builder()
@@ -310,14 +323,22 @@ class MainActivity : AppCompatActivity() {
                 .addFormDataPart("password", password)
                 .build()
 
+            val url = "$serverUrl/api/backup/upload"
+            android.util.Log.d("BackupApp", "请求 URL: $url")
+
             val request = Request.Builder()
-                .url("$serverUrl/api/backup/upload")
+                .url(url)
                 .post(requestBody)
                 .build()
 
             val response = client.newCall(request).execute()
+            val body = response.body?.string() ?: ""
+            android.util.Log.d("BackupApp", "响应码: ${response.code}")
+            android.util.Log.d("BackupApp", "响应体: $body")
+
             response.isSuccessful
         } catch (e: Exception) {
+            android.util.Log.e("BackupApp", "上传失败", e)
             e.printStackTrace()
             false
         }
