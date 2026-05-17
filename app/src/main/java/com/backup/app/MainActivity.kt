@@ -253,6 +253,9 @@ class MainActivity : AppCompatActivity() {
                 android.util.Log.e("BackupApp", "文件过大: ${zipFile.length()} bytes")
                 zipFile.delete()
                 backupDir.deleteRecursively()
+                runOnUiThread {
+                    Toast.makeText(this, "备份失败: 文件过大", Toast.LENGTH_LONG).show()
+                }
                 return false
             }
 
@@ -265,10 +268,19 @@ class MainActivity : AppCompatActivity() {
             zipFile.delete()
             backupDir.deleteRecursively()
 
+            if (!result) {
+                runOnUiThread {
+                    Toast.makeText(this, "备份失败: 上传到服务器失败", Toast.LENGTH_LONG).show()
+                }
+            }
+
             result
         } catch (e: Exception) {
             android.util.Log.e("BackupApp", "备份失败", e)
             e.printStackTrace()
+            runOnUiThread {
+                Toast.makeText(this, "备份异常: ${e.message}", Toast.LENGTH_LONG).show()
+            }
             false
         }
     }
